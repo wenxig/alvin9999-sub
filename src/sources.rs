@@ -1,11 +1,7 @@
-use std::borrow::Cow;
 use std::env;
-use std::error::Error;
-use std::io;
+use std::io::{self, Read};
+use std::thread;
 use std::time::Duration;
-
-use curl::easy::{Easy2, Handler, WriteError};
-use curl::multi::Multi;
 
 const SOURCES: [(&str, &str); 2] = [
     (
@@ -18,56 +14,36 @@ const SOURCES: [(&str, &str); 2] = [
     ),
 ];
 
-#[derive(Default)]
-struct Page(Vec<u8>);
-
-impl Handler for Page {
-    fn write(&mut self, bytes: &[u8]) -> Result<usize, WriteError> {
-        self.0.extend_from_slice(bytes);
-        Ok(bytes.len())
+fn fetch_page(agent: &ureq::Agent, (variable, default_url): (&str, &str)) -> io::Result<Vec<u8>> {
+    let url = env::var(variable).unwrap_or_else(|_| default_url.to_owned());
+    let mut response = agent.get(&url).call().map_err(io::Error::other)?;
+    if !response.status().is_success() {
+        return Err(io::Error::other(format!("HTTP {}", response.status())));
     }
+    let mut bytes = Vec::new();
+    response.body_mut().as_reader().read_to_end(&mut bytes)?;
+    Ok(bytes)
 }
 
-pub fn fetch() -> Result<[Vec<u8>; SOURCES.len()], Box<dyn Error>> {
-    let client = Multi::new();
-    let mut transfers = Vec::with_capacity(SOURCES.len());
-    for (variable, default_url) in SOURCES {
-        let url = env::var(variable).map_or(Cow::Borrowed(default_url), Cow::Owned);
-        let mut request = Easy2::new(Page::default());
-        request.url(&url)?;
-        request.follow_location(true)?;
-        request.max_redirections(20)?;
-        request.fail_on_error(true)?;
-        request.accept_encoding("")?;
-        request.timeout(Duration::from_secs(50))?;
-        transfers.push(client.add2(request)?);
-    }
-
-    loop {
-        let active = client.perform()?;
-        let mut result = Ok(());
-        client.messages(|message| {
-            for (index, transfer) in transfers.iter().enumerate() {
-                if let Some(Err(error)) = message.result_for2(transfer) {
-                    result = Err(io::Error::other(format!("{}: {error}", SOURCES[index].0)));
-                }
-            }
+pub fn fetch() -> io::Result<[Vec<u8>; SOURCES.len()]> {
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .max_redirects(20)
+        .timeout_global(Some(Duration::from_secs(50)))
+        .build()
+        .into();
+    thread::scope(|scope| {
+        let requests = SOURCES.map(|source| {
+            let agent = &agent;
+            scope.spawn(move || {
+                fetch_page(agent, source)
+                    .map_err(|e| io::Error::other(format!("{}: {e}", source.0)))
+            })
         });
-        result?;
-        if active == 0 {
-            break;
-        }
-        client.poll(&mut [], Duration::from_secs(1))?;
-    }
-
-    let mut pages = [const { Vec::new() }; SOURCES.len()];
-    for (index, transfer) in transfers.into_iter().enumerate() {
-        let mut response = client.remove2(transfer)?;
-        let status = response.response_code()?;
-        if !(200..300).contains(&status) {
-            return Err(io::Error::other(format!("{}: HTTP {status}", SOURCES[index].0)).into());
-        }
-        pages[index] = std::mem::take(&mut response.get_mut().0);
-    }
-    Ok(pages)
+        let [ss, v2ray] = requests.map(|request| {
+            request
+                .join()
+                .map_err(|_| io::Error::other("source worker panicked"))?
+        });
+        Ok([ss?, v2ray?])
+    })
 }

@@ -29,7 +29,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
       - run: cargo +stable test --locked
 
   build:
@@ -118,7 +117,7 @@ jobs:
         with:
           tool: cross@0.2.5
 
-      - name: Cross-compile with bundled libcurl and OpenSSL
+      - name: Cross-compile release binary
         if: runner.os == 'Linux'
         run: |
           image_var="CROSS_TARGET_${TARGET^^}_IMAGE"
@@ -129,14 +128,11 @@ jobs:
             toolchain=nightly-2026-05-15
             args=(-Z "build-std=std,panic_abort")
           fi
-          cross "+$toolchain" build --release --locked --target "$TARGET" --features vendored-tls "${args[@]}"
+          cross "+$toolchain" build --release --locked --target "$TARGET" "${args[@]}"
 
-      - name: Compile with platform TLS
+      - name: Compile release binary
         if: runner.os != 'Linux'
-        run: |
-          args=()
-          if [[ "$RUNNER_OS" == Windows ]]; then args+=(--features curl/static-curl); fi
-          cargo +stable build --release --locked --target "$TARGET" "${args[@]}"
+        run: cargo +stable build --release --locked --target "$TARGET"
 
       - name: Stage binary
         run: |
