@@ -32,7 +32,7 @@ https://raw.githubusercontent.com/wenxig/alvin9999-sub/refs/heads/main/data/sub.
 https://raw.githubusercontent.com/wenxig/alvin9999-sub/refs/heads/main/data/sub.yaml
 ```
 
-### 运行命令行程序
+### 在本地运行？
 
 从 [Releases](https://github.com/wenxig/alvin9999-sub/releases/latest) 下载对应平台的二进制。以下示例使用文件名 `alvin9999-sub`。
 这在将程序部署到如路由器上的时候很方便
