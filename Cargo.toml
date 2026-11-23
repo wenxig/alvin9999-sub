@@ -1,0 +1,14 @@
+[package]
+name = "alvin9999-sub"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+
+[dependencies]
+curl = { version = "0.4", features = ["poll_7_68_0"] }
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+strip = "symbols"

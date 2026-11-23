@@ -5,11 +5,11 @@ on:
     branches:
       - main
     paths:
-      - 'src/**'
-      - 'build.ts'
-      - 'package.json'
-      - 'bun.lock'
-      - '.github/workflows/build-binary.yml'
+      - "src/**"
+      - "tests/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/build-binary.yml"
   workflow_dispatch:
 
 permissions:
@@ -29,24 +29,30 @@ jobs:
           fetch-depth: 1
           persist-credentials: true
           sparse-checkout: |
-            build.ts
+            Cargo.toml
+            Cargo.lock
             src
+            tests
 
-      - name: Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.4
+      - name: Install Rust and libcurl
+        run: |
+          rustup toolchain install stable --profile minimal
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev libssl-dev pkg-config
 
       - name: Install Git LFS filters
         run: git lfs install --local
 
       - name: Compile Linux binary
-        run: bun run build.ts
+        run: |
+          cargo +stable test --locked
+          cargo +stable build --release --locked
+          install -D -m 755 target/release/alvin9999-sub bin/alvin9999-sub
 
       - name: Commit binary
         shell: bash
         run: |
-          git add --sparse bin/dongtai-sub
+          git add --sparse bin/alvin9999-sub
           if git diff --cached --quiet; then
             echo 'Binary is unchanged.'
             exit 0

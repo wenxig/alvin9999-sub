@@ -2,7 +2,7 @@ name: Wiki Fetch & Update
 
 on:
   schedule:
-    - cron: '0 */1 * * *'
+    - cron: "0 */1 * * *"
 
   workflow_run:
     workflows:
@@ -41,7 +41,7 @@ jobs:
         timeout-minutes: 1
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
-        run: ./bin/dongtai-sub
+        run: ./bin/alvin9999-sub
 
       - name: Update CI run timestamp
         shell: bash

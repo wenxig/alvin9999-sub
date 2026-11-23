@@ -4,15 +4,14 @@
 
 ## 自动拉取正常运行中✅
 
-![CI](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fwenxig%2Fdongtai-sub%2Frefs%2Fheads%2Fmain%2Fdata%2Fci-status.json&cacheSeconds=300)
+![CI](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fwenxig%2Falvin9999-sub%2Frefs%2Fheads%2Fmain%2Fdata%2Fci-status.json&cacheSeconds=300)
 
 没变化是因为节点健康不需要更新
 
 ## ✨程序特点
 
 - ⚡高自动: 自动抓取[Alvin9999](https://alvin9999.com)的v2ray和ss节点
-- 🚀高性能: 工作流运行时间平均 ***10s***，其中程序运行仅 ***1s***
-- 📚高扩展: 在对应的文件夹下创建文件，系统会自动识别并整合功能，解决重复问题
+- 🚀高性能: 峰值内存仅`3.13 MiB`，CPU 时间`8.98ms`
 - 🎸高坚果: 木柜子吃和会写代码冲突吗
 
 ## 使用方法
