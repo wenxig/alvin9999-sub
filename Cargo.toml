@@ -8,6 +8,9 @@ license = "MIT"
 [dependencies]
 curl = { version = "0.4", features = ["poll_7_68_0"] }
 
+[features]
+vendored-tls = ["curl/static-curl", "curl/static-ssl"]
+
 [profile.release]
 codegen-units = 1
 lto = "thin"

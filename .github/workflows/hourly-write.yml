@@ -30,18 +30,28 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 1
-          lfs: true
           persist-credentials: true
           sparse-checkout: |
-            README.md
-            bin
             data
+
+      - name: Download latest release binary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          case "$RUNNER_ARCH" in
+            X64) arch=x86_64 ;;
+            ARM64) arch=aarch64 ;;
+            *) echo "Unsupported Ubuntu runner architecture: $RUNNER_ARCH" >&2; exit 1 ;;
+          esac
+          gh release download --repo "$GITHUB_REPOSITORY" --pattern "alvin9999-sub-$arch-linux" \
+            --output "$RUNNER_TEMP/alvin9999-sub"
+          chmod +x "$RUNNER_TEMP/alvin9999-sub"
 
       - name: Fetch and extract Wiki pages
         timeout-minutes: 1
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
-        run: ./bin/alvin9999-sub
+        run: '"$RUNNER_TEMP/alvin9999-sub"'
 
       - name: Update CI run timestamp
         shell: bash

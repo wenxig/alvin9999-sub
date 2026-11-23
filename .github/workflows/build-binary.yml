@@ -13,53 +13,160 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: build-binary
+  group: build-binary-${{ github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout source
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 1
-          persist-credentials: true
-          sparse-checkout: |
-            Cargo.toml
-            Cargo.lock
-            src
-            tests
+      - uses: actions/checkout@v7
+      - run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
+      - run: cargo +stable test --locked
 
-      - name: Install Rust and libcurl
+  build:
+    name: Build ${{ matrix.asset }}
+    runs-on: ${{ matrix.runner || 'ubuntu-24.04' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            asset: x86_64-linux
+          - target: x86_64-unknown-linux-musl
+            asset: x86_64-linux-musl
+          - target: i686-unknown-linux-gnu
+            asset: i686-linux
+          - target: i686-unknown-linux-musl
+            asset: i686-linux-musl
+          - target: aarch64-unknown-linux-gnu
+            asset: aarch64-linux
+          - target: aarch64-unknown-linux-musl
+            asset: aarch64-linux-musl
+          - target: armv7-unknown-linux-gnueabi
+            asset: armv7-linux
+          - target: armv7-unknown-linux-gnueabihf
+            asset: armv7-linux-hf
+          - target: armv7-unknown-linux-musleabi
+            asset: armv7-linux-musl
+          - target: armv7-unknown-linux-musleabihf
+            asset: armv7-linux-muslhf
+          - target: mips-unknown-linux-musl
+            asset: mips-linux-musl
+          - target: mipsel-unknown-linux-musl
+            asset: mipsel-linux-musl
+          - target: mips64-unknown-linux-muslabi64
+            asset: mips64-linux-musl
+          - target: mips64el-unknown-linux-muslabi64
+            asset: mips64el-linux-musl
+          - target: loongarch64-unknown-linux-gnu
+            asset: loongarch64-linux
+          - target: riscv64gc-unknown-linux-gnu
+            asset: riscv64gc-linux
+          - target: x86_64-linux-android
+            asset: x86_64-android
+          - target: i686-linux-android
+            asset: i686-android
+          - target: aarch64-linux-android
+            asset: aarch64-android
+          - target: armv7-linux-androideabi
+            asset: armv7-android
+          - target: x86_64-unknown-freebsd
+            asset: x86_64-freebsd
+          - target: i686-unknown-freebsd
+            asset: i686-freebsd
+          - target: x86_64-pc-windows-msvc
+            asset: x86_64-windows.exe
+            runner: windows-latest
+          - target: aarch64-pc-windows-msvc
+            asset: aarch64-windows.exe
+            runner: windows-latest
+          - target: i686-pc-windows-msvc
+            asset: i686-windows.exe
+            runner: windows-latest
+          - target: x86_64-apple-darwin
+            asset: x86_64-darwin
+            runner: macos-15-intel
+          - target: aarch64-apple-darwin
+            asset: aarch64-darwin
+            runner: macos-15
+    env:
+      TARGET: ${{ matrix.target }}
+      ASSET: alvin9999-sub-${{ matrix.asset }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust target
         run: |
-          rustup toolchain install stable --profile minimal
-          sudo apt-get update
-          sudo apt-get install -y libcurl4-openssl-dev libssl-dev pkg-config
-
-      - name: Install Git LFS filters
-        run: git lfs install --local
-
-      - name: Compile Linux binary
-        run: |
-          cargo +stable test --locked
-          cargo +stable build --release --locked
-          install -D -m 755 target/release/alvin9999-sub bin/alvin9999-sub
-
-      - name: Commit binary
-        shell: bash
-        run: |
-          git add --sparse bin/alvin9999-sub
-          if git diff --cached --quiet; then
-            echo 'Binary is unchanged.'
-            exit 0
+          if [[ "$TARGET" == mips* ]]; then
+            # These tier 3 targets require building std from source.
+            rustup toolchain install nightly-2026-05-15 --profile minimal --component rust-src
+          else
+            rustup target add --toolchain stable "$TARGET"
           fi
 
-          git config user.name 'github-actions[bot]'
-          git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git commit -m 'chore: update compiled binary [skip ci]'
-          git lfs push origin HEAD
-          git push
+      - uses: taiki-e/install-action@v2
+        if: runner.os == 'Linux'
+        with:
+          tool: cross@0.2.5
+
+      - name: Cross-compile with bundled libcurl and OpenSSL
+        if: runner.os == 'Linux'
+        run: |
+          image_var="CROSS_TARGET_${TARGET^^}_IMAGE"
+          export "${image_var//-/_}=ghcr.io/cross-rs/$TARGET:edge"
+          toolchain=stable
+          args=()
+          if [[ "$TARGET" == mips* ]]; then
+            toolchain=nightly-2026-05-15
+            args=(-Z "build-std=std,panic_abort")
+          fi
+          cross "+$toolchain" build --release --locked --target "$TARGET" --features vendored-tls "${args[@]}"
+
+      - name: Compile with platform TLS
+        if: runner.os != 'Linux'
+        run: |
+          args=()
+          if [[ "$RUNNER_OS" == Windows ]]; then args+=(--features curl/static-curl); fi
+          cargo +stable build --release --locked --target "$TARGET" "${args[@]}"
+
+      - name: Stage binary
+        run: |
+          binary=alvin9999-sub
+          if [[ "$ASSET" == *.exe ]]; then binary+=.exe; fi
+          mkdir dist
+          cp "target/$TARGET/release/$binary" "dist/$ASSET"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.ASSET }}
+          path: dist/${{ env.ASSET }}
+          if-no-files-found: error
+
+  release:
+    needs: [test, build]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: alvin9999-sub-*
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="build-$GITHUB_RUN_NUMBER-$GITHUB_RUN_ATTEMPT"
+          gh release create "$tag" dist/* --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" --latest --title "$tag" --notes "Built from $GITHUB_SHA."
