@@ -1,33 +1,41 @@
+mod clash;
+mod cli;
 mod extract;
 mod sources;
 
-use std::env;
 use std::error::Error;
 use std::fs;
-use std::io::Write;
-use std::path::Path;
+use std::io::{self, Write};
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let pages = sources::fetch()?;
-    let repository = env::var("GITHUB_REPOSITORY").unwrap_or_else(|_| "wenxig/alvin9999-sub".into());
-    let config = include_str!("clash.yaml")
-        .trim_end_matches('\n')
-        .replace("${REPOSITORY}", &repository);
-
-    let out_dir = Path::new("data");
-    fs::create_dir_all(out_dir)?;
-    let mut output = Vec::new();
-    let mut separator = "";
-    for page in pages {
-        let html = String::from_utf8_lossy(&page);
-        extract::subscriptions(&html, |subscription| {
-            output.write_all(separator.as_bytes())?;
-            output.write_all(subscription.as_bytes())?;
-            separator = "\n";
+    let Some(options) = cli::parse(lexopt::Parser::from_env())? else {
+        println!("{}", cli::HELP);
+        return Ok(());
+    };
+    let mut nodes = Vec::new();
+    for page in sources::fetch()? {
+        extract::subscriptions(&String::from_utf8_lossy(&page), |link| {
+            nodes.push(link.to_owned());
             Ok(())
         })?;
     }
-    fs::write(out_dir.join("sub.txt"), output)?;
-    fs::write(out_dir.join("sub.yaml"), config)?;
+    let mut outputs = Vec::new();
+    if let Some(filename) = options.v2ray {
+        outputs.push((filename, nodes.join("\n")));
+    }
+    if let Some(filename) = options.clash {
+        outputs.push((filename, clash::render(&nodes)?));
+    }
+    if let Some(directory) = options.directory {
+        fs::create_dir_all(&directory)?;
+        for (filename, contents) in outputs {
+            fs::write(directory.join(filename), contents)?;
+        }
+    } else {
+        let mut stdout = io::stdout().lock();
+        for (_, contents) in outputs {
+            writeln!(stdout, "{contents}")?;
+        }
+    }
     Ok(())
 }

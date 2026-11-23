@@ -9,6 +9,7 @@ on:
       - "tests/**"
       - "Cargo.toml"
       - "Cargo.lock"
+      - ".cargo/config.toml"
       - ".github/workflows/build-binary.yml"
   workflow_dispatch:
 

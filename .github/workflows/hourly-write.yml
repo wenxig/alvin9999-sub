@@ -49,8 +49,6 @@ jobs:
 
       - name: Fetch and extract Wiki pages
         timeout-minutes: 1
-        env:
-          GITHUB_REPOSITORY: ${{ github.repository }}
         run: '"$RUNNER_TEMP/alvin9999-sub"'
 
       - name: Update CI run timestamp

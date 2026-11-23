@@ -1,0 +1,3 @@
+[env]
+# Release executables must run without a separate PCRE2 installation.
+PCRE2_SYS_STATIC = "1"

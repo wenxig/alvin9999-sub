@@ -11,7 +11,7 @@
 ## ✨程序特点
 
 - ⚡高自动: 自动抓取[Alvin9999](https://alvin9999.com)的v2ray和ss节点
-- 🚀高性能: 峰值内存仅`3.13 MiB`，CPU 时间`8.98ms`
+- 🚀高性能: 峰值内存仅`3.18 MiB`，CPU 时间`9.09 ms`
 - 🎸高坚果: 木柜子吃和会写代码冲突吗
 
 ## 使用方法
@@ -31,6 +31,21 @@ https://raw.githubusercontent.com/wenxig/alvin9999-sub/refs/heads/main/data/sub.
 ```sh
 https://raw.githubusercontent.com/wenxig/alvin9999-sub/refs/heads/main/data/sub.yaml
 ```
+
+### 运行命令行程序
+
+从 [Releases](https://github.com/wenxig/alvin9999-sub/releases/latest) 下载对应平台的二进制。以下示例使用文件名 `alvin9999-sub`。
+这在将程序部署到如路由器上的时候很方便
+
+```sh
+alvin9999-sub                                  # 写入 ./data/sub.txt 和 ./data/sub.yaml
+alvin9999-sub -w ./out -v nodes.txt -c clash.yaml
+alvin9999-sub --write ./out --enable-clash clash.yaml
+alvin9999-sub -W -v                            # 仅将节点链接写入标准输出
+alvin9999-sub --no-write --enable-clash > clash.yaml
+```
+
+显式指定格式时，仅生成选中的格式。`-W` 下文件名可省略，提供时会被忽略。两种格式同时输出到标准输出时，先输出 V2Ray 链接，换行后输出 Clash 配置。
 
 ---
 
