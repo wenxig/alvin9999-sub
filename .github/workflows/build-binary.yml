@@ -40,16 +40,38 @@ jobs:
         include:
           - target: x86_64-unknown-linux-gnu
             asset: x86_64-linux
+          - target: x86_64-unknown-linux-gnu
+            asset: x86_64-linux-centos7
+            image-tag: main-centos
           - target: x86_64-unknown-linux-musl
             asset: x86_64-linux-musl
+          # ring requires SSE2 on 32-bit x86, which the i586 baseline lacks.
           - target: i686-unknown-linux-gnu
             asset: i686-linux
           - target: i686-unknown-linux-musl
             asset: i686-linux-musl
           - target: aarch64-unknown-linux-gnu
             asset: aarch64-linux
+          - target: aarch64-unknown-linux-gnu
+            asset: aarch64-linux-centos7
+            image-tag: main-centos
           - target: aarch64-unknown-linux-musl
             asset: aarch64-linux-musl
+          - target: aarch64_be-unknown-linux-gnu
+            asset: aarch64_be-linux
+            build-std: true
+          - target: arm-unknown-linux-gnueabi
+            asset: arm-linux
+          - target: arm-unknown-linux-gnueabihf
+            asset: arm-linux-hf
+          - target: arm-unknown-linux-musleabi
+            asset: arm-linux-musl
+          - target: arm-unknown-linux-musleabihf
+            asset: arm-linux-muslhf
+          - target: armv5te-unknown-linux-gnueabi
+            asset: armv5te-linux
+          - target: armv5te-unknown-linux-musleabi
+            asset: armv5te-linux-musl
           - target: armv7-unknown-linux-gnueabi
             asset: armv7-linux
           - target: armv7-unknown-linux-gnueabihf
@@ -58,30 +80,83 @@ jobs:
             asset: armv7-linux-musl
           - target: armv7-unknown-linux-musleabihf
             asset: armv7-linux-muslhf
+          - target: thumbv7neon-unknown-linux-gnueabihf
+            asset: thumbv7neon-linux-hf
+          - target: mips-unknown-linux-gnu
+            asset: mips-linux
+            build-std: true
           - target: mips-unknown-linux-musl
             asset: mips-linux-musl
+            build-std: true
+          - target: mipsel-unknown-linux-gnu
+            asset: mipsel-linux
+            build-std: true
           - target: mipsel-unknown-linux-musl
             asset: mipsel-linux-musl
+            build-std: true
+          - target: mips64-unknown-linux-gnuabi64
+            asset: mips64-linux
+            build-std: true
           - target: mips64-unknown-linux-muslabi64
             asset: mips64-linux-musl
+            build-std: true
+          - target: mips64el-unknown-linux-gnuabi64
+            asset: mips64el-linux
+            build-std: true
           - target: mips64el-unknown-linux-muslabi64
             asset: mips64el-linux-musl
+            build-std: true
           - target: loongarch64-unknown-linux-gnu
             asset: loongarch64-linux
+          - target: loongarch64-unknown-linux-musl
+            asset: loongarch64-linux-musl
           - target: riscv64gc-unknown-linux-gnu
             asset: riscv64gc-linux
+          - target: riscv64gc-unknown-linux-musl
+            asset: riscv64gc-linux-musl
+          - target: powerpc-unknown-linux-gnu
+            asset: powerpc-linux
+          - target: powerpc64-unknown-linux-gnu
+            asset: powerpc64-linux
+          - target: powerpc64le-unknown-linux-gnu
+            asset: powerpc64le-linux
+          - target: s390x-unknown-linux-gnu
+            asset: s390x-linux
+          - target: sparc64-unknown-linux-gnu
+            asset: sparc64-linux
           - target: x86_64-linux-android
             asset: x86_64-android
           - target: i686-linux-android
             asset: i686-android
           - target: aarch64-linux-android
             asset: aarch64-android
+          - target: arm-linux-androideabi
+            asset: arm-android
           - target: armv7-linux-androideabi
             asset: armv7-android
+          - target: thumbv7neon-linux-androideabi
+            asset: thumbv7neon-android
           - target: x86_64-unknown-freebsd
             asset: x86_64-freebsd
           - target: i686-unknown-freebsd
             asset: i686-freebsd
+          - target: aarch64-unknown-freebsd
+            asset: aarch64-freebsd
+          - target: x86_64-unknown-netbsd
+            asset: x86_64-netbsd
+          - target: x86_64-unknown-dragonfly
+            asset: x86_64-dragonfly
+            build-std: true
+          - target: x86_64-unknown-illumos
+            asset: x86_64-illumos
+          - target: x86_64-pc-solaris
+            asset: x86_64-solaris
+          - target: sparcv9-sun-solaris
+            asset: sparcv9-solaris
+          - target: x86_64-pc-windows-gnu
+            asset: x86_64-windows-gnu.exe
+          - target: i686-pc-windows-gnu
+            asset: i686-windows-gnu.exe
           - target: x86_64-pc-windows-msvc
             asset: x86_64-windows.exe
             runner: windows-latest
@@ -100,14 +175,16 @@ jobs:
     env:
       TARGET: ${{ matrix.target }}
       ASSET: alvin9999-sub-${{ matrix.asset }}
+      IMAGE_TAG: ${{ matrix.image-tag || 'edge' }}
+      BUILD_STD: ${{ matrix.build-std || false }}
+      BUILD_STD_TOOLCHAIN: nightly-2026-05-15
     steps:
       - uses: actions/checkout@v7
 
       - name: Install Rust target
         run: |
-          if [[ "$TARGET" == mips* ]]; then
-            # These tier 3 targets require building std from source.
-            rustup toolchain install nightly-2026-05-15 --profile minimal --component rust-src
+          if [[ "$BUILD_STD" == true ]]; then
+            rustup toolchain install "$BUILD_STD_TOOLCHAIN" --profile minimal --component rust-src
           else
             rustup target add --toolchain stable "$TARGET"
           fi
@@ -121,11 +198,38 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           image_var="CROSS_TARGET_${TARGET^^}_IMAGE"
-          export "${image_var//-/_}=ghcr.io/cross-rs/$TARGET:edge"
+          export "${image_var//-/_}=ghcr.io/cross-rs/$TARGET:$IMAGE_TAG"
+          passthrough=()
+          cflags=
+          case "$TARGET" in
+            arm-linux-androideabi|thumbv7neon-linux-androideabi|sparc64-unknown-linux-gnu|sparcv9-sun-solaris)
+              # PCRE2 JIT fails to link on these Android targets and lacks SPARC support.
+              cflags="-USUPPORT_JIT"
+              ;;
+          esac
+          if [[ "$IMAGE_TAG" == main-centos ]]; then
+            # GCC 4.8 defaults to C89, but PCRE2 uses C99.
+            cflags="-std=gnu99"
+            if [[ "$TARGET" == aarch64-unknown-linux-gnu ]]; then
+              # This GCC also lacks the __ARM_ARCH macro used by ring's assembly.
+              cflags+=" -D__ARM_ARCH=8"
+            fi
+          fi
+          if [[ -n "$cflags" ]]; then
+            cflags_var="CFLAGS_${TARGET//-/_}"
+            export "$cflags_var=$cflags"
+            passthrough+=("$cflags_var")
+          fi
+          if [[ "$TARGET" == *-solaris ]]; then
+            # cross's Solaris images provide a shim for the XPG7 symbols used by Rust std.
+            export RUSTFLAGS="-C link-arg=/compat.o"
+            passthrough+=(RUSTFLAGS)
+          fi
+          export CROSS_BUILD_ENV_PASSTHROUGH="${passthrough[*]}"
           toolchain=stable
           args=()
-          if [[ "$TARGET" == mips* ]]; then
-            toolchain=nightly-2026-05-15
+          if [[ "$BUILD_STD" == true ]]; then
+            toolchain="$BUILD_STD_TOOLCHAIN"
             args=(-Z "build-std=std,panic_abort")
           fi
           cross "+$toolchain" build --release --locked --target "$TARGET" "${args[@]}"
